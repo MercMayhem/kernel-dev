@@ -13,20 +13,71 @@ MODULE_LICENSE("Dual BSD/GPL");
 static int scull_major = 0;
 static int scull_minor = 0;
 static int scull_nr_devs = 4;
+static int scull_qset = 1000;
 
 module_param(scull_major, int, S_IRUGO);
 
 static dev_t dev = 0;
 
-struct file_operations scull_fops = {
-	.owner = THIS_MODULE,
+struct scull_qset{
+	void **data;
+	struct scull_qset * next;
 };
 
 struct scull_dev{
 	struct cdev cdev;
+	struct scull_qset *data;
+	int qset;
 };
 
+int scull_trim(struct scull_dev *dev){
+	struct scull_qset *dptr, *next;
+	int i;
+	int qset =  dev->qset;
+	for (dptr = dev->data; dptr; dptr = next){
+		if (dptr->data){
+			for(i = 0; i < qset; i++){
+				kfree(dptr->data[i]);
+			}
+			kfree(dptr->data);
+			dptr->data = NULL;
+		}
+		next = dptr->next;
+		kfree(dptr);
+	}
+
+	dev->data = NULL;
+	dev->qset = scull_qset;
+	return 0;
+}
+
+int scull_open(struct inode * inode, struct file * filp){
+	struct scull_dev * dev;
+	dev = container_of(inode->i_cdev, struct scull_dev, cdev);
+
+	filp->private_data = dev;
+
+	if((filp->f_flags & O_ACCMODE) == O_WRONLY){
+		scull_trim(dev);
+	}
+
+	printk(KERN_INFO "scull: Opened device %d\n", iminor(inode));
+
+	return 0;
+}
+
+int scull_release(struct inode * inode, struct file * filp){
+	printk(KERN_INFO "scull: Released device %d\n", iminor(inode));
+	return 0;
+}
+
 static struct scull_dev scull_devp_array[SCULL_DEV_NO];
+
+struct file_operations scull_fops = {
+	.owner = THIS_MODULE,
+	.open = scull_open,
+	.release = scull_release
+};
 
 static void scull_setup_cdev(struct scull_dev *dev, int index){
 	dev_t dev_no = MKDEV(scull_major, scull_minor + index);
