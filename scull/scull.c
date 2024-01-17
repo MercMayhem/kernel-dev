@@ -141,7 +141,6 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 }
 
 ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos){
-	printk(KERN_INFO "WORKS\n");
 	struct scull_dev *dev = filp->private_data;
 	struct scull_qset *dptr;
 	int quantum = dev->quantum, qset = dev->qset;
@@ -156,11 +155,9 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, lof
 	rest = (long)*f_pos % itemsize;
 	s_pos = rest / quantum; q_pos = rest % quantum;
 
-	printk(KERN_INFO "WORKS 2\n");
 	dptr = scull_follow(dev, item);
 	if (dptr == NULL)
 		goto out;
-	printk(KERN_INFO "WORKS 3\n");
 
 	if (!dptr->data){
 		dptr->data = kmalloc(sizeof(char *)  * dev->qset, GFP_KERNEL);
