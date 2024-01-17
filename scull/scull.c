@@ -32,7 +32,7 @@ struct scull_dev{
 	unsigned long size;
 	int quantum;
 	unsigned int access_key;
-	struct semaphore sem;
+	struct mutex lock;
 };
 
 int scull_trim(struct scull_dev *dev){
@@ -55,6 +55,7 @@ int scull_trim(struct scull_dev *dev){
 	dev->qset = scull_qset_val;
 	dev->size = 0;
 	dev->quantum = scull_quantum_val;
+
 	return 0;
 }
 
@@ -79,18 +80,35 @@ int scull_release(struct inode * inode, struct file * filp){
 }
 
 struct scull_qset* scull_follow(struct scull_dev *dev, int item){
-	struct scull_qset* ptr = dev->data;
-	struct scull_qset* rptr = NULL;
+	if (dev->data == NULL){
+		pr_info("scull: allocating initial qset");
+		struct scull_qset* temp = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
+		if (temp == NULL){
+			return NULL;	
+		}
 
-	for(int i=0; i<item+1; i++){
-		pr_info("DEBUG: ptr = %p, ptr->next = %p\n", ptr, ptr ? ptr->next : NULL);
+		temp->next = NULL;
+		temp->data = NULL;
+		dev->data = temp;
+
+		pr_info("scull: allocated qset at %p", temp);
+	}
+	
+	struct scull_qset* rptr = dev->data;
+	struct scull_qset* ptr = rptr->next;
+
+	for(int i=0; i<item; i++){
+		pr_info("scull: ptr = %p, ptr->next = %p\n", ptr, ptr ? ptr->next : NULL);
 		if(ptr == NULL){
+			pr_info("scull: allocating a qset");
 			ptr = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
 			if (ptr == NULL)
 				return NULL;
+			pr_info("scull: qset allocated at %p", ptr);
 			memset(ptr, 0, sizeof(struct scull_qset));
 			ptr->data = NULL;
 			ptr->next = NULL;
+			rptr->next = ptr;
 		}
 
 		rptr = ptr;
@@ -108,7 +126,7 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 	int itemsize = quantum * qset;
 	int item, s_pos, q_pos, rest;
 
-	if (down_interruptible(&dev->sem))
+	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	if (*f_pos >= dev->size)
 		goto out;
@@ -128,6 +146,7 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 		count = quantum - q_pos;
 
 	if (copy_to_user(buf, dptr->data[s_pos] + q_pos, count)){
+		pr_info("scull: start is %p", dptr->data[s_pos] + q_pos);
 		return -EFAULT;
 		goto out;
 	}
@@ -136,8 +155,8 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 	retval = count;
 
 	out:
-		up(&dev->sem);
-		return retval;
+		mutex_unlock(&dev->lock);
+		return retval; 
 }
 
 ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos){
@@ -148,7 +167,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, lof
 	int item, s_pos, q_pos, rest;
 	ssize_t retval = -ENOMEM;
 
-	if (down_interruptible(&dev->sem))
+	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 
 	item = (long)*f_pos / itemsize;
@@ -186,7 +205,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count, lof
 		dev->size = *f_pos;
 
 	out:
-		up(&dev->sem);
+		mutex_unlock(&dev->lock);
 		return retval; 
 }
 
