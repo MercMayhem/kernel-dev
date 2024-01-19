@@ -259,8 +259,8 @@ static int __init scull_init(void){
 	printk(KERN_INFO "scull: Major is %d", scull_major);
 
 	for(int i = scull_minor; i < scull_nr_devs; i++){
-		scull_setup_cdev(&scull_devp_array[i], i);
 		mutex_init(&scull_devp_array[i].lock);
+		scull_setup_cdev(&scull_devp_array[i], i);
 	}
 	return 0;
 }
