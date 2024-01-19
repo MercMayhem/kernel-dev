@@ -5,6 +5,7 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/mutex.h>
 
 #define SCULL_DEV_NO 4
 
@@ -55,6 +56,7 @@ int scull_trim(struct scull_dev *dev){
 	dev->qset = scull_qset_val;
 	dev->size = 0;
 	dev->quantum = scull_quantum_val;
+	mutex_init(&dev->lock);
 
 	return 0;
 }
