@@ -56,7 +56,6 @@ int scull_trim(struct scull_dev *dev){
 	dev->qset = scull_qset_val;
 	dev->size = 0;
 	dev->quantum = scull_quantum_val;
-	mutex_init(&dev->lock);
 
 	return 0;
 }
@@ -261,6 +260,7 @@ static int __init scull_init(void){
 
 	for(int i = scull_minor; i < scull_nr_devs; i++){
 		scull_setup_cdev(&scull_devp_array[i], i);
+		mutex_init(&scull_devp_array[i].lock);
 	}
 	return 0;
 }
