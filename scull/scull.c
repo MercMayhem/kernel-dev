@@ -258,7 +258,7 @@ static int __init scull_init(void){
 
 	printk(KERN_INFO "scull: Major is %d", scull_major);
 
-	for(int i = scull_minor; i < scull_nr_devs; i++){
+	for(int i = scull_minor; i < scull_minor + scull_nr_devs; i++){
 		mutex_init(&scull_devp_array[i].lock);
 		scull_setup_cdev(&scull_devp_array[i], i);
 	}
@@ -267,6 +267,9 @@ static int __init scull_init(void){
 
 static void __exit scull_exit(void){
 	printk(KERN_INFO "scull: Exiting...\n");
+	for(int i = scull_minor; i < scull_minor + scull_nr_devs; i++)
+		scull_trim(&scull_devp_array[i]);
+
 	unregister_chrdev_region(dev, scull_nr_devs);
 	printk(KERN_INFO "scull: Unregistered device\n");
 	for(int i = scull_minor; i < scull_nr_devs; i++){
